@@ -1,0 +1,85 @@
+name: One-time dashboard UI patch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-dashboard-ui.yml'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+environment:
+  name: github-pages
+  url: ${{ steps.deployment.outputs.page_url }}
+
+jobs:
+  patch-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch dashboard bundle
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('monarch-ops-dashboard.html')
+          text = path.read_text(encoding='utf-8')
+          repls = [
+          (r"""  ST = {\n    ns:{label:'Not started', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#F1E7D6;color:#6E5F57;border:1px solid #E0D2BD', col:'#C9C2BC'},\n    wip:{label:'Working on it', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#FCEAD7;color:#B5650F', col:'#F47C20'},\n    dn:{label:'Done', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#E7F0DA;color:#4E7A12', col:'#5C8A1B'},\n  };""",
+          r"""  ST = {\n    ns:{label:'Not started', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#F1E7D6;color:#6E5F57;border:1px solid #E0D2BD', col:'#C9C2BC'},\n    wip:{label:'In progress', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#FCEAD7;color:#B5650F', col:'#F47C20'},\n    wait:{label:'Waiting', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#EAF0F9;color:#2D5F94;border:1px solid #C9D8EA', col:'#4D7FB3'},\n    blocked:{label:'Blocked', badge:'font:600 11px Urbanist;padding:2px 9px;border-radius:20px;background:#FBE7E7;color:#A32D2D;border:1px solid #F0B9B9', col:'#C0392B'},\n    review:{label:'Review', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#F0E8FA;color:#6B3FA0;border:1px solid #D9C5EF', col:'#8E63C7'},\n    dn:{label:'Done', badge:'font:500 11px Urbanist;padding:2px 9px;border-radius:20px;background:#E7F0DA;color:#4E7A12', col:'#5C8A1B'},\n  };\n  STATUS_ORDER = ['ns','wip','wait','blocked','review','dn'];"""),
+          (r"""<input ref=\"{{ regEl }}\" data-k=\"{{ task.eoKey }}\" defaultvalue=\"{{ task.dOwner }}\" onchange=\"{{ onInput }}\" placeholder=\"Owner\" style=\"font:400 12px Urbanist;padding:5px 9px;border:1px solid #E0D2BD;border-radius:8px;background:#fff;color:#201420;outline:none;width:120px\">""",
+          r"""<select ref=\"{{ regEl }}\" data-k=\"{{ task.eoKey }}\" defaultvalue=\"{{ task.dOwner }}\" onchange=\"{{ onInput }}\" style=\"font:400 12px Urbanist;padding:5px 9px;border:1px solid #E0D2BD;border-radius:8px;background:#fff;color:#201420;outline:none;cursor:pointer;width:92px\"><option value=\"\">None<\u002Foption><option value=\"MR\">MR<\u002Foption><option value=\"AL\">AL<\u002Foption><option value=\"RW\">RW<\u002Foption><\u002Fselect>"""),
+          (r"""<select ref=\"{{ regEl }}\" data-k=\"{{ sec.statusKey }}\" defaultvalue=\"ns\" style=\"font:400 12px Urbanist;padding:9px 11px;border:1px solid #E0D2BD;border-radius:10px;background:#fff;color:#201420;outline:none;cursor:pointer\"><option value=\"ns\">Not started<\u002Foption><option value=\"wip\">Working on it<\u002Foption><option value=\"dn\">Done<\u002Foption><\u002Fselect>""",
+          r"""<select ref=\"{{ regEl }}\" data-k=\"{{ sec.statusKey }}\" defaultvalue=\"ns\" style=\"font:400 12px Urbanist;padding:9px 11px;border:1px solid #E0D2BD;border-radius:10px;background:#fff;color:#201420;outline:none;cursor:pointer\"><option value=\"ns\">Not started<\u002Foption><option value=\"wip\">In progress<\u002Foption><option value=\"wait\">Waiting<\u002Foption><option value=\"blocked\">Blocked<\u002Foption><option value=\"review\">Review<\u002Foption><option value=\"dn\">Done<\u002Foption><\u002Fselect>"""),
+          ("cycleStatus(k, id) { this.mutate(d => { const t = this.findSec(d,k).tasks.find(t=>t.id===id); const c=['ns','wip','dn']; t.status=c[(c.indexOf(t.status)+1)%c.length]; t.completedAt = t.status==='dn'?new Date().toISOString():null; }); }",
+          "cycleStatus(k, id) { this.mutate(d => { const t = this.findSec(d,k).tasks.find(t=>t.id===id); const c=this.STATUS_ORDER; t.status=c[(c.indexOf(t.status)+1)%c.length]; t.completedAt = t.status==='dn'?new Date().toISOString():null; }); }"),
+          ("saveEdit(k, id) { const g=key=>{const e=this.els[key];return e?e.value:null;}; this.mutate(d => { const t=this.findSec(d,k).tasks.find(t=>t.id===id); const p=g('ep-'+id);if(p!==null)t.priority=p; const o=g('eo-'+id);if(o!==null)t.owner=o; const du=g('ed-'+id);if(du!==null)t.due=du; const n=g('en-'+id);if(n!==null)t.note=n; }); this.setState({ editingId:null }); }",
+          "saveEdit(k, id) { const g=key=>{const e=this.els[key];return e?e.value:null;}; this.mutate(d => { const t=this.findSec(d,k).tasks.find(t=>t.id===id); const p=g('ep-'+id);if(p!==null)t.priority=p; const o=g('eo-'+id);if(o!==null)t.owner=['MR','AL','RW'].includes(o)?o:''; const du=g('ed-'+id);if(du!==null)t.due=du; const n=g('en-'+id);if(n!==null)t.note=n; }); this.setState({ editingId:null }); }"),
+          ("const dn = cnt(t=>t.status==='dn'), wip = cnt(t=>t.status==='wip'), ns = cnt(t=>t.status==='ns');",
+          "const dn = cnt(t=>t.status==='dn'), wip = cnt(t=>t.status==='wip'), ns = cnt(t=>t.status==='ns'), wait = cnt(t=>t.status==='wait'), blocked = cnt(t=>t.status==='blocked'), review = cnt(t=>t.status==='review'), active = total - dn - ns;"),
+          ("const colDefs = [['ns','Not started'],['wip','Working on it'],['dn','Done']];",
+          "const colDefs = this.STATUS_ORDER.map(k => [k, this.ST[k].label]);"),
+          ("wip:'width:'+w(wip)+'%;background:#F47C20;transition:width .6s'",
+          "wip:'width:'+w(active)+'%;background:#F47C20;transition:width .6s'"),
+          ("{ label:'Working on it', count:wip, dotStyle:'width:11px;height:11px;border-radius:50%;flex:none;background:#F47C20' },",
+          "{ label:'In progress', count:wip, dotStyle:'width:11px;height:11px;border-radius:50%;flex:none;background:#F47C20' },\\n      { label:'Waiting', count:wait, dotStyle:'width:11px;height:11px;border-radius:50%;flex:none;background:#4D7FB3' },\\n      { label:'Blocked', count:blocked, dotStyle:'width:11px;height:11px;border-radius:50%;flex:none;background:#C0392B' },\\n      { label:'Review', count:review, dotStyle:'width:11px;height:11px;border-radius:50%;flex:none;background:#8E63C7' },"),
+          ("const t = s.tasks.length, d2 = s.tasks.filter(x=>x.status==='dn').length, wp = s.tasks.filter(x=>x.status==='wip').length, n2 = s.tasks.filter(x=>x.status==='ns').length;",
+          "const t = s.tasks.length, d2 = s.tasks.filter(x=>x.status==='dn').length, wp = s.tasks.filter(x=>!['ns','dn'].includes(x.status)).length, n2 = s.tasks.filter(x=>x.status==='ns').length;"),
+          ]
+          missing = []
+          for old, new in repls:
+              if old not in text:
+                  missing.append(old[:120])
+              else:
+                  text = text.replace(old, new, 1)
+          text = text.replace("error:['⚠️ offline','#A32D2D']", "error:['⚠️ save issue','#A32D2D']", 1)
+          text = text.replace("activeLabel:wip+' active · '+overdue+' overdue'", "activeLabel:active+' active · '+overdue+' overdue'", 1)
+          old_cards = "{ label:'In progress', value:wip, valueStyle:numStyle('#F47C20') },\\n        { label:'Not started', value:ns, valueStyle:numStyle('#6E5F57') },\\n        { label:'Completed', value:dn, valueStyle:numStyle('#5C8A1B') },\\n        { label:'Overdue', value:overdue, valueStyle:numStyle(overdue?'#A32D2D':'#201420') },"
+          new_cards = "{ label:'Active', value:active, valueStyle:numStyle('#F47C20') },\\n        { label:'Blocked', value:blocked, valueStyle:numStyle(blocked?'#A32D2D':'#201420') },\\n        { label:'Review', value:review, valueStyle:numStyle('#8E63C7') },\\n        { label:'Completed', value:dn, valueStyle:numStyle('#5C8A1B') },"
+          if old_cards not in text:
+              missing.append(old_cards[:120])
+          else:
+              text = text.replace(old_cards, new_cards, 1)
+          if missing:
+              raise SystemExit('Missing replacements: ' + repr(missing))
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Remove one-time workflow
+        run: git rm .github/workflows/patch-dashboard-ui.yml
+      - name: Commit patched dashboard
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add monarch-ops-dashboard.html
+          git commit -m "Update dashboard statuses and assignees"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
