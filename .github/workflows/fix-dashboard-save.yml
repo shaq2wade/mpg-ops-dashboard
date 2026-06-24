@@ -1,0 +1,41 @@
+name: One-time dashboard save fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-dashboard-save.yml'
+      - '.github/scripts/fix_save.py'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  patch-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Patch dashboard saving
+        run: python .github/scripts/fix_save.py
+      - name: Remove one-time patch files
+        run: git rm .github/workflows/fix-dashboard-save.yml .github/scripts/fix_save.py
+      - name: Commit fixed dashboard
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add monarch-ops-dashboard.html
+          git commit -m "Fix dashboard saving"
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
