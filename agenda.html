@@ -145,9 +145,9 @@
     <section class="panel setup hidden" id="setupPanel">
       <div>
         <h2>Calendar Source</h2>
-        <div class="bigdate">Outlook feed</div>
+        <div class="bigdate">Agenda sources</div>
       </div>
-      <div class="notice">Use an Outlook ICS link or upload an .ics export. The URL/file is stored only in this browser.</div>
+      <div class="notice">For one-click refresh, run <strong>Start-Agenda-AutoRefresh.cmd</strong> locally and keep that window open. You can still use an Outlook ICS link, .ics import, or JSON upload as a fallback.</div>
       <div class="field">
         <label for="feedInput">Outlook ICS link</label>
         <input class="input" id="feedInput" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics">
@@ -428,6 +428,27 @@
       }
     }
 
+    async function fetchLocalOutlookDigest() {
+      const url = config.localDigestUrl || "http://127.0.0.1:8765/digest";
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20000);
+      try {
+        const res = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), {
+          cache: "no-store",
+          signal: controller.signal
+        });
+        if (!res.ok) throw new Error("Local Outlook helper unavailable");
+        const digest = await res.json();
+        localStorage.setItem(storeKey("outlookDigestStorageKey", "mpg_agenda_outlook_digest_v1"), JSON.stringify(digest));
+        els.calendarStatus.textContent = "Outlook refreshed";
+        return digest;
+      } catch (err) {
+        return loadOutlookDigest();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
     function dateLabel(value) {
       if (!value) return "";
       const date = new Date(value);
@@ -542,7 +563,7 @@
     }
 
     function digestPriorityItems() {
-      const digest = loadOutlookDigest();
+      const digest = await fetchLocalOutlookDigest();
       const inbox = (digest.inbox || []).map((mail) => ({
         title: mail.subject || "No subject",
         section: ["Inbox", mail.sender, dateLabel(mail.received)].filter(Boolean).join(" | "),
@@ -679,6 +700,9 @@
     });
 
     refresh();
+    setInterval(() => {
+      if (!shouldLock()) refresh();
+    }, config.autoRefreshMs || 300000);
   </script>
 </body>
 </html>
