@@ -55,7 +55,7 @@ function Score-Task {
   if ($Task.PercentComplete -gt 0 -and $Task.PercentComplete -lt 100) { $score += 15 }
   try {
     $due = [datetime]$Task.DueDate
-    if ($due.Year -gt 1900) {
+    if ($due.Year -gt 1900 -and $due.Year -lt 2100) {
       $today = (Get-Date).Date
       $days = ($due.Date - $today).Days
       if ($days -lt 0) { $score += 70 }
@@ -115,7 +115,7 @@ try {
     $taskRows.Add([pscustomobject]@{
       id = Clean-Text $task.EntryID 300
       subject = Clean-Text $task.Subject 220
-      due = if ($due -and $due.Year -gt 1900) { $due.ToString("yyyy-MM-dd") } else { "" }
+      due = if ($due -and $due.Year -gt 1900 -and $due.Year -lt 2100) { $due.ToString("yyyy-MM-dd") } else { "" }
       status = [string]$task.Status
       percentComplete = [int]$task.PercentComplete
       importance = if ($task.Importance -eq 2) { "high" } elseif ($task.Importance -eq 0) { "low" } else { "normal" }
