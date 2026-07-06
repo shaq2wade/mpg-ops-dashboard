@@ -72,23 +72,27 @@ $cutoff = (Get-Date).AddDays(-1 * [math]::Abs($DaysBack))
 
 $inboxRows = New-Object System.Collections.Generic.List[object]
 $inboxItems = $namespace.GetDefaultFolder(6).Items
+try { $inboxItems = $inboxItems.Restrict("[FlagStatus] = 2") } catch {}
 $inboxItems.Sort("[ReceivedTime]", $true)
 
 $seenInbox = 0
 foreach ($item in $inboxItems) {
   if ($seenInbox -ge $MaxInbox) { break }
   if ($item.Class -ne 43) { continue }
+  $flagStatus = 0
+  try { $flagStatus = [int]$item.FlagStatus } catch {}
+  if ($flagStatus -ne 2) { continue }
   $received = $null
   try { $received = [datetime]$item.ReceivedTime } catch {}
-  if ($received -and $received -lt $cutoff -and -not $item.UnRead -and $item.FlagStatus -eq 0) { continue }
   $seenInbox += 1
   $inboxRows.Add([pscustomobject]@{
+    id = Clean-Text $item.EntryID 300
     subject = Clean-Text $item.Subject 220
     sender = Clean-Text $item.SenderName 120
     senderEmail = Clean-Text $item.SenderEmailAddress 160
     received = if ($received) { $received.ToString("o") } else { "" }
     unread = [bool]$item.UnRead
-    flagged = [bool]($item.FlagStatus -ne 0)
+    flagged = $true
     importance = if ($item.Importance -eq 2) { "high" } elseif ($item.Importance -eq 0) { "low" } else { "normal" }
     categories = Clean-Text $item.Categories 120
     preview = Clean-Text $item.Body 420
@@ -109,6 +113,7 @@ try {
     $due = $null
     try { $due = [datetime]$task.DueDate } catch {}
     $taskRows.Add([pscustomobject]@{
+      id = Clean-Text $task.EntryID 300
       subject = Clean-Text $task.Subject 220
       due = if ($due -and $due.Year -gt 1900) { $due.ToString("yyyy-MM-dd") } else { "" }
       status = [string]$task.Status
@@ -121,13 +126,13 @@ try {
   }
 } catch {}
 
-$inboxSorted = @($inboxRows | Sort-Object score -Descending | Select-Object -First 30)
-$tasksSorted = @($taskRows | Sort-Object score -Descending | Select-Object -First 30)
+$inboxSorted = @($inboxRows | Sort-Object @{ Expression = { if ($_.received) { [datetime]$_.received } else { [datetime]::MinValue } }; Descending = $true } | Select-Object -First 30)
+$tasksSorted = @($taskRows | Sort-Object @{ Expression = { if ($_.due) { [datetime]$_.due } else { [datetime]::MaxValue } }; Ascending = $true }, subject | Select-Object -First 30)
 
 $digest = [pscustomobject]@{
   generatedAt = (Get-Date).ToString("o")
   source = "Outlook desktop local export"
-  inboxWindowDays = $DaysBack
+  inboxFilter = "active flagged follow-up"
   counts = [pscustomobject]@{
     inbox = $inboxSorted.Count
     unread = @($inboxSorted | Where-Object { $_.unread }).Count

@@ -84,6 +84,31 @@
     .file { border: 1px dashed #e0d2bd; border-radius: 10px; padding: 11px; background: #fff; }
     .row { display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-top: 1px solid #f1e7d6; }
     .row:first-child { border-top: 0; padding-top: 0; }
+    .row.is-done { opacity: .55; }
+    .row.is-done .item-title, .row.is-done .meta { text-decoration: line-through; }
+    .done-check { position: relative; width: 24px; height: 24px; flex: none; margin-top: -2px; cursor: pointer; }
+    .done-check input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+    .done-check span {
+      display: block;
+      width: 22px;
+      height: 22px;
+      border: 1px solid #d9cbb8;
+      border-radius: 7px;
+      background: #fff;
+      position: relative;
+    }
+    .done-check input:checked + span { border-color: #5c8a1b; background: #5c8a1b; }
+    .done-check input:checked + span::after {
+      content: "";
+      position: absolute;
+      left: 7px;
+      top: 3px;
+      width: 5px;
+      height: 10px;
+      border: solid #fff;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
     .time { width: 86px; flex: none; font-size: 12px; font-weight: 800; color: #b5650f; }
     .item-title { font-size: 14px; font-weight: 700; line-height: 1.25; }
     .meta { margin-top: 4px; color: #6e5f57; font-size: 12px; line-height: 1.35; }
@@ -449,7 +474,7 @@
         const digest = await res.json();
         localStorage.setItem(storeKey("outlookDigestStorageKey", "mpg_agenda_outlook_digest_v1"), JSON.stringify(digest));
         const stats = digestStats(digest);
-        els.calendarStatus.textContent = "Outlook " + stats.inbox + " inbox / " + stats.tasks + " tasks";
+        els.calendarStatus.textContent = "Outlook " + stats.inbox + " flagged / " + stats.tasks + " tasks";
         return digest;
       } catch (err) {
         const fallback = loadOutlookDigest();
@@ -468,14 +493,82 @@
       return new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(date);
     }
 
+
+    function doneStoreKey() {
+      return storeKey("doneStorageKey", "mpg_agenda_done_v1");
+    }
+
+    function loadDoneMap() {
+      try {
+        return JSON.parse(localStorage.getItem(doneStoreKey()) || "{}");
+      } catch (err) {
+        return {};
+      }
+    }
+
+    function saveDoneMap(doneMap) {
+      localStorage.setItem(doneStoreKey(), JSON.stringify(doneMap));
+    }
+
+    function itemDoneId(kind, item) {
+      const parts = [
+        kind,
+        item.id || "",
+        item.senderEmail || "",
+        item.sender || "",
+        item.received || "",
+        item.due || "",
+        item.subject || ""
+      ];
+      return parts.join("|").toLowerCase();
+    }
+
+    function isDone(kind, item) {
+      return !!loadDoneMap()[itemDoneId(kind, item)];
+    }
+
+    function doneControl(kind, item) {
+      const id = itemDoneId(kind, item);
+      const checked = isDone(kind, item) ? " checked" : "";
+      return '<label class="done-check" title="Done">' +
+        '<input type="checkbox" aria-label="Done" data-done-id="' + escapeHtml(id) + '"' + checked + '>' +
+        '<span></span>' +
+      '</label>';
+    }
+
+    function dateValue(value, fallback) {
+      if (!value) return fallback;
+      const time = Date.parse(value);
+      return Number.isNaN(time) ? fallback : time;
+    }
+
+    function sortInboxByDate(items) {
+      return (items || []).slice().sort((a, b) => dateValue(b.received, 0) - dateValue(a.received, 0));
+    }
+
+    function sortTasksByDate(items) {
+      return (items || []).slice().sort((a, b) => {
+        const diff = dateValue(a.due, Number.MAX_SAFE_INTEGER) - dateValue(b.due, Number.MAX_SAFE_INTEGER);
+        if (diff !== 0) return diff;
+        return String(a.subject || "").localeCompare(String(b.subject || ""));
+      });
+    }
+
     function renderInbox(items) {
-      if (!items.length) {
-        els.inboxList.innerHTML = '<div class="empty">No inbox actions loaded yet.</div>';
+      const sorted = sortInboxByDate(items);
+      if (!sorted.length) {
+        els.inboxList.innerHTML = '<div class="empty">No flagged inbox actions loaded yet.</div>';
         return;
       }
-      els.inboxList.innerHTML = items.slice(0, 8).map((mail) => {
-        const tags = [mail.unread ? "Unread" : "", mail.flagged ? "Flagged" : "", mail.importance === "high" ? "High" : ""].filter(Boolean);
-        return '<div class="row">' +
+      els.inboxList.innerHTML = sorted.slice(0, 8).map((mail) => {
+        const tags = [
+          mail.unread ? "Unread" : "",
+          mail.flagged ? "Flagged" : "",
+          mail.importance === "high" ? "High" : ""
+        ].filter(Boolean);
+        const done = isDone("mail", mail);
+        return '<div class="row' + (done ? ' is-done' : '') + '">' +
+          doneControl("mail", mail) +
           '<div class="time">' + escapeHtml(dateLabel(mail.received)) + '</div>' +
           '<div>' +
             '<div class="item-title">' + escapeHtml(mail.subject || "No subject") + '</div>' +
@@ -487,13 +580,20 @@
     }
 
     function renderOutlookTasks(items) {
-      if (!items.length) {
+      const sorted = sortTasksByDate(items);
+      if (!sorted.length) {
         els.outlookTaskList.innerHTML = '<div class="empty">No Outlook tasks loaded yet.</div>';
         return;
       }
-      els.outlookTaskList.innerHTML = items.slice(0, 8).map((task) => {
-        const tags = [task.due ? "Due " + task.due : "", task.importance === "high" ? "High" : "", task.percentComplete ? task.percentComplete + "% done" : ""].filter(Boolean);
-        return '<div class="row">' +
+      els.outlookTaskList.innerHTML = sorted.slice(0, 8).map((task) => {
+        const tags = [
+          task.due ? "Due " + task.due : "",
+          task.importance === "high" ? "High" : "",
+          task.percentComplete ? task.percentComplete + "% done" : ""
+        ].filter(Boolean);
+        const done = isDone("task", task);
+        return '<div class="row' + (done ? ' is-done' : '') + '">' +
+          doneControl("task", task) +
           '<div class="time">' + escapeHtml(task.due || "Task") + '</div>' +
           '<div>' +
             '<div class="item-title">' + escapeHtml(task.subject || "Untitled task") + '</div>' +
@@ -576,14 +676,14 @@
 
     function digestPriorityItems() {
       const digest = loadOutlookDigest();
-      const inbox = (digest.inbox || []).map((mail) => ({
+      const inbox = sortInboxByDate(digest.inbox || []).filter((mail) => !isDone("mail", mail)).map((mail) => ({
         title: mail.subject || "No subject",
         section: ["Inbox", mail.sender, dateLabel(mail.received)].filter(Boolean).join(" | "),
         score: mail.score || 0,
         tags: ["Email", mail.unread ? "Unread" : "", mail.flagged ? "Flagged" : "", mail.importance === "high" ? "High" : ""].filter(Boolean),
         badge: mail.flagged || mail.importance === "high" ? "orange" : "blue"
       }));
-      const tasks = (digest.tasks || []).map((task) => ({
+      const tasks = sortTasksByDate(digest.tasks || []).filter((task) => !isDone("task", task)).map((task) => ({
         title: task.subject || "Untitled task",
         section: ["Outlook Task", task.due ? "Due " + task.due : ""].filter(Boolean).join(" | "),
         score: task.score || 0,
@@ -660,16 +760,37 @@
       const cachedDigest = loadOutlookDigest();
       renderInbox(cachedDigest.inbox || []);
       renderOutlookTasks(cachedDigest.tasks || []);
-      renderPriorities(digestPriorityItems().concat(dashboardTasks()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, config.priorityLimit || 8));
+      renderAgendaPriorities();
       const text = await loadIcsText();
       renderMeetings(text ? todaysEvents(text) : []);
       const digest = await fetchLocalOutlookDigest();
       renderInbox(digest.inbox || []);
       renderOutlookTasks(digest.tasks || []);
+      renderAgendaPriorities();
+    }
+
+    function renderAgendaPriorities() {
       renderPriorities(digestPriorityItems().concat(dashboardTasks()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, config.priorityLimit || 8));
     }
 
+    function handleDoneChange(event) {
+      const input = event.target;
+      if (!input || !input.matches("input[data-done-id]")) return;
+      const doneMap = loadDoneMap();
+      if (input.checked) {
+        doneMap[input.dataset.doneId] = new Date().toISOString();
+      } else {
+        delete doneMap[input.dataset.doneId];
+      }
+      saveDoneMap(doneMap);
+      const row = input.closest(".row");
+      if (row) row.classList.toggle("is-done", input.checked);
+      renderAgendaPriorities();
+    }
+
     els.refresh.addEventListener("click", refresh);
+    els.inboxList.addEventListener("change", handleDoneChange);
+    els.outlookTaskList.addEventListener("change", handleDoneChange);
     els.setup.addEventListener("click", () => {
       if (shouldLock()) return showLock();
       els.lockPanel.classList.add("hidden");
