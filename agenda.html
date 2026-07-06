@@ -243,6 +243,7 @@
     els.todayPill.textContent = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short" }).format(today);
 
     let currentIcsText = "";
+    const helperTimeoutMs = 5000;
 
     function storeKey(name, fallback) {
       return config[name] || fallback;
@@ -428,10 +429,17 @@
       }
     }
 
+    function digestStats(digest) {
+      const inbox = (digest && digest.inbox) || [];
+      const tasks = (digest && digest.tasks) || [];
+      return { inbox: inbox.length, tasks: tasks.length, total: inbox.length + tasks.length };
+    }
+
     async function fetchLocalOutlookDigest() {
       const url = config.localDigestUrl || "http://127.0.0.1:8765/digest";
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 20000);
+      const timer = setTimeout(() => controller.abort(), helperTimeoutMs);
+      els.calendarStatus.textContent = "Checking Outlook helper...";
       try {
         const res = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(), {
           cache: "no-store",
@@ -440,10 +448,14 @@
         if (!res.ok) throw new Error("Local Outlook helper unavailable");
         const digest = await res.json();
         localStorage.setItem(storeKey("outlookDigestStorageKey", "mpg_agenda_outlook_digest_v1"), JSON.stringify(digest));
-        els.calendarStatus.textContent = "Outlook refreshed";
+        const stats = digestStats(digest);
+        els.calendarStatus.textContent = "Outlook " + stats.inbox + " inbox / " + stats.tasks + " tasks";
         return digest;
       } catch (err) {
-        return loadOutlookDigest();
+        const fallback = loadOutlookDigest();
+        const stats = digestStats(fallback);
+        els.calendarStatus.textContent = stats.total ? "Using saved Outlook digest" : "Start local Outlook helper";
+        return fallback;
       } finally {
         clearTimeout(timer);
       }
@@ -458,7 +470,7 @@
 
     function renderInbox(items) {
       if (!items.length) {
-        els.inboxList.innerHTML = '<div class="empty">No inbox digest imported.</div>';
+        els.inboxList.innerHTML = '<div class="empty">No inbox actions loaded yet.</div>';
         return;
       }
       els.inboxList.innerHTML = items.slice(0, 8).map((mail) => {
@@ -476,7 +488,7 @@
 
     function renderOutlookTasks(items) {
       if (!items.length) {
-        els.outlookTaskList.innerHTML = '<div class="empty">No Outlook task digest imported.</div>';
+        els.outlookTaskList.innerHTML = '<div class="empty">No Outlook tasks loaded yet.</div>';
         return;
       }
       els.outlookTaskList.innerHTML = items.slice(0, 8).map((task) => {
@@ -563,7 +575,7 @@
     }
 
     function digestPriorityItems() {
-      const digest = await fetchLocalOutlookDigest();
+      const digest = loadOutlookDigest();
       const inbox = (digest.inbox || []).map((mail) => ({
         title: mail.subject || "No subject",
         section: ["Inbox", mail.sender, dateLabel(mail.received)].filter(Boolean).join(" | "),
@@ -645,9 +657,13 @@
     async function refresh() {
       if (shouldLock()) { showLock(); return; }
       showAgenda();
+      const cachedDigest = loadOutlookDigest();
+      renderInbox(cachedDigest.inbox || []);
+      renderOutlookTasks(cachedDigest.tasks || []);
+      renderPriorities(digestPriorityItems().concat(dashboardTasks()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, config.priorityLimit || 8));
       const text = await loadIcsText();
-      const digest = loadOutlookDigest();
       renderMeetings(text ? todaysEvents(text) : []);
+      const digest = await fetchLocalOutlookDigest();
       renderInbox(digest.inbox || []);
       renderOutlookTasks(digest.tasks || []);
       renderPriorities(digestPriorityItems().concat(dashboardTasks()).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, config.priorityLimit || 8));

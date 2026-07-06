@@ -37,6 +37,7 @@ function Write-HttpResponse {
     "Access-Control-Allow-Origin: https://shaq2wade.github.io`r`n" +
     "Access-Control-Allow-Methods: GET, OPTIONS`r`n" +
     "Access-Control-Allow-Headers: Content-Type`r`n" +
+    "Access-Control-Allow-Private-Network: true`r`n" +
     "Cache-Control: no-store`r`n" +
     "Connection: close`r`n`r`n"
   $headerBytes = [System.Text.Encoding]::ASCII.GetBytes($header)
