@@ -1,0 +1,31 @@
+name: Add agenda done toggles and flagged filter
+
+on:
+  push:
+    paths:
+      - ".github/workflows/add-agenda-done-flags.yml"
+      - ".github/scripts/add_agenda_done_flags.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch agenda files
+        run: python .github/scripts/add_agenda_done_flags.py
+      - name: Commit agenda updates
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add agenda.html agenda-config.js "Export Outlook Agenda.ps1"
+          git rm -f .github/workflows/add-agenda-done-flags.yml .github/scripts/add_agenda_done_flags.py
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add agenda done toggles and flagged inbox filter"
+            git push
+          fi
