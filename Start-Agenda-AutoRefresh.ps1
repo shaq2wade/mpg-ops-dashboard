@@ -70,8 +70,12 @@ if ($env:MPG_AGENDA_OPEN_BROWSER -eq "1") {
 try {
   while ($true) {
     $client = $listener.AcceptTcpClient()
+    $client.ReceiveTimeout = 3000
+    $client.SendTimeout = 3000
     try {
       $stream = $client.GetStream()
+      $stream.ReadTimeout = 3000
+      $stream.WriteTimeout = 3000
       $reader = [System.IO.StreamReader]::new($stream, [System.Text.Encoding]::ASCII, $false, 1024, $true)
       $requestLine = $reader.ReadLine()
       while ($true) {
