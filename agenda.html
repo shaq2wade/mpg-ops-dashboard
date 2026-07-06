@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daily Agenda | Monarch Ops Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
+  <script src="./agenda-config.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #fff8ee;
+      color: #201420;
+      font-family: Urbanist, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .45;
+      background:
+        radial-gradient(circle at 18% 18%, rgba(244,124,32,.10), transparent 28%),
+        radial-gradient(circle at 82% 12%, rgba(45,95,148,.09), transparent 24%),
+        radial-gradient(circle at 72% 78%, rgba(92,138,27,.08), transparent 30%);
+    }
+    button, input, select { font: inherit; }
+    .wrap { position: relative; max-width: 1100px; margin: 0 auto; padding: 26px 20px 80px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .mark { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; background: #201420; color: #f47c20; font-weight: 800; font-size: 24px; }
+    .divider { width: 1px; height: 36px; background: #e0d2bd; }
+    .title { font-size: 16px; font-weight: 800; }
+    .sub { font-size: 12px; color: #a2978c; margin-top: 1px; }
+    .actions { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+    .btn {
+      border: 1px solid #e0d2bd;
+      background: #fff;
+      color: #201420;
+      border-radius: 10px;
+      padding: 9px 13px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .btn.primary { border: none; background: #f47c20; color: #fff; }
+    .btn.dark { border: none; background: #201420; color: #fff; }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .pill { font: 700 12px Urbanist; color: #fff; background: #f47c20; padding: 7px 14px; border-radius: 20px; }
+    .grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; align-items: start; }
+    .panel {
+      background: rgba(255,255,255,.92);
+      border: 1px solid #efe3d2;
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 8px 26px rgba(49,31,12,.04);
+    }
+    .panel h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; }
+    .datebar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .bigdate { font-size: 28px; line-height: 1.05; font-weight: 800; }
+    .muted { color: #a2978c; }
+    .notice { border: 1px dashed #e0d2bd; background: #fff; border-radius: 12px; padding: 14px; color: #6e5f57; line-height: 1.45; }
+    .setup code { display: inline-block; background: #fbf3e6; border: 1px solid #efe3d2; border-radius: 7px; padding: 2px 6px; color: #201420; }
+    .row { display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-top: 1px solid #f1e7d6; }
+    .row:first-child { border-top: 0; padding-top: 0; }
+    .time { width: 86px; flex: none; font-size: 12px; font-weight: 800; color: #b5650f; }
+    .item-title { font-size: 14px; font-weight: 700; line-height: 1.25; }
+    .meta { margin-top: 4px; color: #6e5f57; font-size: 12px; line-height: 1.35; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 20px; padding: 2px 8px; border: 1px solid #e0d2bd; background: #fff; font-size: 11px; font-weight: 700; color: #6e5f57; margin: 5px 5px 0 0; }
+    .badge.red { border-color: #f0b9b9; background: #fbe7e7; color: #a32d2d; }
+    .badge.orange { border-color: #ecd9ae; background: #faf0da; color: #8a5a0b; }
+    .badge.blue { border-color: #c9d8ea; background: #eaf0f9; color: #2d5f94; }
+    .focus-list { display: grid; gap: 9px; }
+    .focus {
+      border: 1px solid #efe3d2;
+      border-radius: 11px;
+      padding: 11px 12px;
+      background: #fff;
+    }
+    .score { font-size: 11px; font-weight: 800; color: #a2978c; text-transform: uppercase; letter-spacing: .05em; }
+    .locked { display: grid; gap: 12px; max-width: 620px; }
+    .hidden { display: none !important; }
+    .empty { color: #a2978c; font-style: italic; font-size: 13px; padding: 10px 0; }
+    .footer-note { margin-top: 14px; color: #a2978c; font-size: 11px; line-height: 1.45; }
+    @media (max-width: 820px) {
+      .grid { grid-template-columns: 1fr; }
+      .bigdate { font-size: 24px; }
+      .time { width: 72px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">M</div>
+        <div class="divider"></div>
+        <div>
+          <div class="title">Daily Agenda</div>
+          <div class="sub">Priority plan from Outlook and Ops Dashboard</div>
+        </div>
+      </div>
+      <div class="actions">
+        <a class="btn" href="./">Back to dashboard</a>
+        <button class="btn" id="refreshBtn" disabled>Refresh</button>
+        <button class="btn dark hidden" id="signOutBtn">Sign out</button>
+        <button class="btn primary" id="signInBtn">Sign in with Microsoft</button>
+        <div class="pill" id="todayPill">Today</div>
+      </div>
+    </div>
+
+    <section class="panel locked" id="lockedPanel">
+      <div>
+        <h2>Locked</h2>
+        <div class="bigdate" id="lockedDate">Daily agenda</div>
+      </div>
+      <div class="notice" id="lockMessage">Sign in with Microsoft to load your daily agenda.</div>
+      <div class="notice setup hidden" id="setupMessage">
+        Outlook is not connected yet. Add a Microsoft Entra app client ID in <code>agenda-config.js</code>, with redirect URI <code>https://shaq2wade.github.io/mpg-ops-dashboard/agenda.html</code>.
+      </div>
+    </section>
+
+    <section class="grid hidden" id="agendaGrid">
+      <div class="panel">
+        <div class="datebar">
+          <div>
+            <h2>Today</h2>
+            <div class="bigdate" id="agendaDate"></div>
+          </div>
+          <div class="muted" id="signedInAs"></div>
+        </div>
+        <div id="meetingList"></div>
+      </div>
+
+      <aside class="panel">
+        <h2>Priority</h2>
+        <div class="focus-list" id="priorityList"></div>
+        <div class="footer-note">Priority is scored from critical/high status, blocked or review state, overdue dates, and tasks due soon.</div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    const config = window.MPG_AGENDA_CONFIG || {};
+    const els = {
+      signIn: document.getElementById("signInBtn"),
+      signOut: document.getElementById("signOutBtn"),
+      refresh: document.getElementById("refreshBtn"),
+      lockedPanel: document.getElementById("lockedPanel"),
+      lockMessage: document.getElementById("lockMessage"),
+      setupMessage: document.getElementById("setupMessage"),
+      agendaGrid: document.getElementById("agendaGrid"),
+      meetingList: document.getElementById("meetingList"),
+      priorityList: document.getElementById("priorityList"),
+      agendaDate: document.getElementById("agendaDate"),
+      lockedDate: document.getElementById("lockedDate"),
+      todayPill: document.getElementById("todayPill"),
+      signedInAs: document.getElementById("signedInAs")
+    };
+
+    const fmtDay = new Intl.DateTimeFormat("en-NZ", { weekday: "long", day: "numeric", month: "long" });
+    const fmtTime = new Intl.DateTimeFormat("en-NZ", { hour: "numeric", minute: "2-digit" });
+    const today = new Date();
+    els.agendaDate.textContent = fmtDay.format(today);
+    els.lockedDate.textContent = fmtDay.format(today);
+    els.todayPill.textContent = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short" }).format(today);
+
+    let msalApp = null;
+    let activeAccount = null;
+
+    function hasConfig() {
+      return !!(config.clientId && !/enter|paste|client/i.test(config.clientId));
+    }
+
+    function localIso(date) {
+      const pad = (n) => String(n).padStart(2, "0");
+      const offset = -date.getTimezoneOffset();
+      const sign = offset >= 0 ? "+" : "-";
+      const abs = Math.abs(offset);
+      return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
+        "T" + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds()) +
+        sign + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60);
+    }
+
+    function dayBounds() {
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return { start, end };
+    }
+
+    async function getToken() {
+      const request = { scopes: config.scopes || ["User.Read", "Calendars.Read"], account: activeAccount };
+      try {
+        return (await msalApp.acquireTokenSilent(request)).accessToken;
+      } catch (err) {
+        await msalApp.acquireTokenRedirect(request);
+      }
+    }
+
+    async function graph(path) {
+      const token = await getToken();
+      const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
+        headers: {
+          Authorization: "Bearer " + token,
+          Prefer: 'outlook.timezone="' + (config.graphTimeZone || "New Zealand Standard Time") + '"'
+        }
+      });
+      if (!res.ok) throw new Error("Graph request failed: " + res.status);
+      return res.json();
+    }
+
+    function taskScore(task) {
+      let score = 0;
+      if (task.priority === "crit") score += 90;
+      if (task.priority === "hi") score += 55;
+      if (task.status === "blocked") score += 80;
+      if (task.status === "review") score += 60;
+      if (task.status === "wait") score += 35;
+      if (task.status === "wip") score += 25;
+      if (task.due) {
+        const due = new Date(task.due);
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const days = Math.round((due - now) / 86400000);
+        if (days < 0) score += 70;
+        else if (days === 0) score += 50;
+        else if (days <= 7) score += 25;
+      }
+      const reqs = Array.isArray(task.reqs) ? task.reqs : [];
+      const openReqs = reqs.filter((r) => !(typeof r === "object" && r.done)).length;
+      score += Math.min(openReqs * 4, 20);
+      return score;
+    }
+
+    function dashboardTasks() {
+      try {
+        const raw = localStorage.getItem(config.dashboardStorageKey || "mpg_ops_dashboard_data_v4");
+        if (!raw) return [];
+        const data = JSON.parse(raw);
+        const out = [];
+        (data.sections || []).forEach((section) => {
+          (section.tasks || []).forEach((task) => {
+            if (task.status === "dn") return;
+            const score = taskScore(task);
+            if (score <= 0) return;
+            out.push({ section: section.label, color: section.color, score, task });
+          });
+        });
+        return out.sort((a, b) => b.score - a.score).slice(0, config.priorityLimit || 8);
+      } catch (err) {
+        return [];
+      }
+    }
+
+    function badgeClass(task) {
+      if (task.priority === "crit" || task.status === "blocked") return "red";
+      if (task.priority === "hi" || task.status === "review") return "orange";
+      return "blue";
+    }
+
+    function renderPriorities(items) {
+      if (!items.length) {
+        els.priorityList.innerHTML = '<div class="empty">No priority dashboard tasks found on this browser.</div>';
+        return;
+      }
+      els.priorityList.innerHTML = items.map(({ section, score, task }) => {
+        const tags = [
+          task.priority === "crit" ? "Critical" : task.priority === "hi" ? "High" : "",
+          task.status ? task.status : "",
+          task.due ? "Due " + task.due : ""
+        ].filter(Boolean);
+        return '<div class="focus">' +
+          '<div class="score">' + Math.round(score) + ' priority points</div>' +
+          '<div class="item-title">' + escapeHtml(task.name || "Untitled") + '</div>' +
+          '<div class="meta">' + escapeHtml(section || "") + '</div>' +
+          '<div>' + tags.map((t) => '<span class="badge ' + badgeClass(task) + '">' + escapeHtml(t) + '</span>').join("") + '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    function renderMeetings(events) {
+      if (!events.length) {
+        els.meetingList.innerHTML = '<div class="empty">No Outlook meetings today.</div>';
+        return;
+      }
+      els.meetingList.innerHTML = events.map((event) => {
+        const start = event.start && event.start.dateTime ? new Date(event.start.dateTime) : null;
+        const end = event.end && event.end.dateTime ? new Date(event.end.dateTime) : null;
+        const time = event.isAllDay ? "All day" : (start ? fmtTime.format(start) : "") + (end ? " - " + fmtTime.format(end) : "");
+        const location = event.location && event.location.displayName ? event.location.displayName : "";
+        const organizer = event.organizer && event.organizer.emailAddress ? event.organizer.emailAddress.name : "";
+        return '<div class="row">' +
+          '<div class="time">' + escapeHtml(time) + '</div>' +
+          '<div>' +
+            '<div class="item-title">' + escapeHtml(event.subject || "No subject") + '</div>' +
+            '<div class="meta">' + escapeHtml([location, organizer].filter(Boolean).join(" | ")) + '</div>' +
+            (event.importance === "high" ? '<span class="badge red">High importance</span>' : '') +
+          '</div>' +
+        '</div>';
+      }).join("");
+    }
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[c]));
+    }
+
+    async function loadAgenda() {
+      els.refresh.disabled = true;
+      els.refresh.textContent = "Refreshing";
+      try {
+        const { start, end } = dayBounds();
+        const params = new URLSearchParams({
+          startDateTime: localIso(start),
+          endDateTime: localIso(end),
+          "$orderby": "start/dateTime",
+          "$select": "subject,start,end,location,organizer,responseStatus,isAllDay,importance,showAs"
+        });
+        const data = await graph("/me/calendar/calendarView?" + params.toString());
+        renderMeetings(data.value || []);
+        renderPriorities(dashboardTasks());
+      } catch (err) {
+        els.meetingList.innerHTML = '<div class="notice">Could not load Outlook agenda. Sign in again or check Microsoft app permissions.</div>';
+        renderPriorities(dashboardTasks());
+      } finally {
+        els.refresh.disabled = false;
+        els.refresh.textContent = "Refresh";
+      }
+    }
+
+    function showUnlocked() {
+      els.lockedPanel.classList.add("hidden");
+      els.agendaGrid.classList.remove("hidden");
+      els.signIn.classList.add("hidden");
+      els.signOut.classList.remove("hidden");
+      els.refresh.disabled = false;
+      els.signedInAs.textContent = activeAccount && activeAccount.username ? activeAccount.username : "";
+    }
+
+    async function init() {
+      if (!hasConfig()) {
+        els.setupMessage.classList.remove("hidden");
+        els.lockMessage.textContent = "Outlook sign-in needs a Microsoft app client ID before this page can unlock.";
+        els.signIn.disabled = true;
+        return;
+      }
+      msalApp = new msal.PublicClientApplication({
+        auth: {
+          clientId: config.clientId,
+          authority: "https://login.microsoftonline.com/" + (config.tenantId || "organizations"),
+          redirectUri: config.redirectUri || window.location.href,
+          navigateToLoginRequestUrl: false
+        },
+        cache: { cacheLocation: "sessionStorage" }
+      });
+      const result = await msalApp.handleRedirectPromise();
+      activeAccount = result && result.account ? result.account : msalApp.getAllAccounts()[0];
+      if (activeAccount) {
+        msalApp.setActiveAccount(activeAccount);
+        showUnlocked();
+        loadAgenda();
+      }
+    }
+
+    els.signIn.addEventListener("click", () => msalApp && msalApp.loginRedirect({ scopes: config.scopes || ["User.Read", "Calendars.Read"] }));
+    els.signOut.addEventListener("click", () => msalApp && msalApp.logoutRedirect());
+    els.refresh.addEventListener("click", loadAgenda);
+    init();
+  </script>
+</body>
+</html>
