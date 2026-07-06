@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Urbanist:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script src="https://alcdn.msauth.net/browser/2.38.4/js/msal-browser.min.js"></script>
   <script src="./agenda-config.js"></script>
   <style>
     * { box-sizing: border-box; }
@@ -29,7 +28,7 @@
         radial-gradient(circle at 82% 12%, rgba(45,95,148,.09), transparent 24%),
         radial-gradient(circle at 72% 78%, rgba(92,138,27,.08), transparent 30%);
     }
-    button, input, select { font: inherit; }
+    button, input { font: inherit; }
     .wrap { position: relative; max-width: 1100px; margin: 0 auto; padding: 26px 20px 80px; }
     .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
     .brand { display: flex; align-items: center; gap: 14px; }
@@ -69,7 +68,20 @@
     .bigdate { font-size: 28px; line-height: 1.05; font-weight: 800; }
     .muted { color: #a2978c; }
     .notice { border: 1px dashed #e0d2bd; background: #fff; border-radius: 12px; padding: 14px; color: #6e5f57; line-height: 1.45; }
-    .setup code { display: inline-block; background: #fbf3e6; border: 1px solid #efe3d2; border-radius: 7px; padding: 2px 6px; color: #201420; }
+    .setup { display: grid; gap: 10px; max-width: 720px; }
+    .field { display: grid; gap: 6px; }
+    .field label { font-size: 11px; font-weight: 800; color: #a2978c; text-transform: uppercase; letter-spacing: .05em; }
+    .input {
+      width: 100%;
+      border: 1px solid #e0d2bd;
+      background: #fff;
+      color: #201420;
+      border-radius: 10px;
+      padding: 10px 12px;
+      outline: none;
+      font-size: 13px;
+    }
+    .file { border: 1px dashed #e0d2bd; border-radius: 10px; padding: 11px; background: #fff; }
     .row { display: flex; gap: 10px; align-items: flex-start; padding: 12px 0; border-top: 1px solid #f1e7d6; }
     .row:first-child { border-top: 0; padding-top: 0; }
     .time { width: 86px; flex: none; font-size: 12px; font-weight: 800; color: #b5650f; }
@@ -80,17 +92,12 @@
     .badge.orange { border-color: #ecd9ae; background: #faf0da; color: #8a5a0b; }
     .badge.blue { border-color: #c9d8ea; background: #eaf0f9; color: #2d5f94; }
     .focus-list { display: grid; gap: 9px; }
-    .focus {
-      border: 1px solid #efe3d2;
-      border-radius: 11px;
-      padding: 11px 12px;
-      background: #fff;
-    }
+    .focus { border: 1px solid #efe3d2; border-radius: 11px; padding: 11px 12px; background: #fff; }
     .score { font-size: 11px; font-weight: 800; color: #a2978c; text-transform: uppercase; letter-spacing: .05em; }
-    .locked { display: grid; gap: 12px; max-width: 620px; }
     .hidden { display: none !important; }
     .empty { color: #a2978c; font-style: italic; font-size: 13px; padding: 10px 0; }
     .footer-note { margin-top: 14px; color: #a2978c; font-size: 11px; line-height: 1.45; }
+    .inline-actions { display: flex; gap: 8px; flex-wrap: wrap; }
     @media (max-width: 820px) {
       .grid { grid-template-columns: 1fr; }
       .bigdate { font-size: 24px; }
@@ -106,37 +113,71 @@
         <div class="divider"></div>
         <div>
           <div class="title">Daily Agenda</div>
-          <div class="sub">Priority plan from Outlook and Ops Dashboard</div>
+          <div class="sub">Local Outlook feed plus Ops Dashboard priorities</div>
         </div>
       </div>
       <div class="actions">
         <a class="btn" href="./">Back to dashboard</a>
-        <button class="btn" id="refreshBtn" disabled>Refresh</button>
-        <button class="btn dark hidden" id="signOutBtn">Sign out</button>
-        <button class="btn primary" id="signInBtn">Sign in with Microsoft</button>
+        <button class="btn" id="refreshBtn">Refresh</button>
+        <button class="btn" id="setupBtn">Calendar</button>
+        <button class="btn dark" id="lockBtn">Lock</button>
         <div class="pill" id="todayPill">Today</div>
       </div>
     </div>
 
-    <section class="panel locked" id="lockedPanel">
+    <section class="panel setup hidden" id="lockPanel">
       <div>
-        <h2>Locked</h2>
+        <h2 id="lockTitle">Locked</h2>
         <div class="bigdate" id="lockedDate">Daily agenda</div>
       </div>
-      <div class="notice" id="lockMessage">Sign in with Microsoft to load your daily agenda.</div>
-      <div class="notice setup hidden" id="setupMessage">
-        Outlook is not connected yet. Add a Microsoft Entra app client ID in <code>agenda-config.js</code>, with redirect URI <code>https://shaq2wade.github.io/mpg-ops-dashboard/agenda.html</code>.
+      <div class="notice" id="lockMessage"></div>
+      <div class="field">
+        <label for="pinInput">PIN</label>
+        <input class="input" id="pinInput" type="password" inputmode="numeric" autocomplete="current-password">
+      </div>
+      <div class="inline-actions">
+        <button class="btn primary" id="unlockBtn">Unlock</button>
+        <button class="btn" id="resetPinBtn">Reset local lock</button>
       </div>
     </section>
 
-    <section class="grid hidden" id="agendaGrid">
+    <section class="panel setup hidden" id="setupPanel">
+      <div>
+        <h2>Calendar Source</h2>
+        <div class="bigdate">Outlook feed</div>
+      </div>
+      <div class="notice">Use an Outlook ICS link or upload an .ics export. The URL/file is stored only in this browser.</div>
+      <div class="field">
+        <label for="feedInput">Outlook ICS link</label>
+        <input class="input" id="feedInput" placeholder="https://outlook.office365.com/owa/calendar/.../calendar.ics">
+      </div>
+      <div class="inline-actions">
+        <button class="btn primary" id="saveFeedBtn">Save feed</button>
+        <button class="btn" id="clearFeedBtn">Clear calendar</button>
+      </div>
+      <div class="field">
+        <label for="fileInput">ICS file import</label>
+        <input class="file" id="fileInput" type="file" accept=".ics,text/calendar">
+      </div>
+      <div class="field">
+        <label for="newPinInput">Local page PIN</label>
+        <input class="input" id="newPinInput" type="password" inputmode="numeric" autocomplete="new-password" placeholder="Optional local PIN">
+      </div>
+      <div class="inline-actions">
+        <button class="btn" id="savePinBtn">Save PIN</button>
+        <button class="btn" id="closeSetupBtn">Done</button>
+      </div>
+      <div class="footer-note">Static GitHub Pages cannot provide a server-grade private lock. This page keeps calendar data local to your browser and hides it behind a local PIN for casual protection.</div>
+    </section>
+
+    <section class="grid" id="agendaGrid">
       <div class="panel">
         <div class="datebar">
           <div>
             <h2>Today</h2>
             <div class="bigdate" id="agendaDate"></div>
           </div>
-          <div class="muted" id="signedInAs"></div>
+          <div class="muted" id="calendarStatus"></div>
         </div>
         <div id="meetingList"></div>
       </div>
@@ -152,19 +193,30 @@
   <script>
     const config = window.MPG_AGENDA_CONFIG || {};
     const els = {
-      signIn: document.getElementById("signInBtn"),
-      signOut: document.getElementById("signOutBtn"),
       refresh: document.getElementById("refreshBtn"),
-      lockedPanel: document.getElementById("lockedPanel"),
-      lockMessage: document.getElementById("lockMessage"),
-      setupMessage: document.getElementById("setupMessage"),
+      setup: document.getElementById("setupBtn"),
+      lock: document.getElementById("lockBtn"),
       agendaGrid: document.getElementById("agendaGrid"),
+      setupPanel: document.getElementById("setupPanel"),
+      lockPanel: document.getElementById("lockPanel"),
+      lockTitle: document.getElementById("lockTitle"),
+      lockMessage: document.getElementById("lockMessage"),
+      pinInput: document.getElementById("pinInput"),
+      unlock: document.getElementById("unlockBtn"),
+      resetPin: document.getElementById("resetPinBtn"),
+      feedInput: document.getElementById("feedInput"),
+      saveFeed: document.getElementById("saveFeedBtn"),
+      clearFeed: document.getElementById("clearFeedBtn"),
+      fileInput: document.getElementById("fileInput"),
+      newPinInput: document.getElementById("newPinInput"),
+      savePin: document.getElementById("savePinBtn"),
+      closeSetup: document.getElementById("closeSetupBtn"),
       meetingList: document.getElementById("meetingList"),
       priorityList: document.getElementById("priorityList"),
       agendaDate: document.getElementById("agendaDate"),
       lockedDate: document.getElementById("lockedDate"),
       todayPill: document.getElementById("todayPill"),
-      signedInAs: document.getElementById("signedInAs")
+      calendarStatus: document.getElementById("calendarStatus")
     };
 
     const fmtDay = new Intl.DateTimeFormat("en-NZ", { weekday: "long", day: "numeric", month: "long" });
@@ -174,21 +226,10 @@
     els.lockedDate.textContent = fmtDay.format(today);
     els.todayPill.textContent = new Intl.DateTimeFormat("en-NZ", { day: "numeric", month: "short" }).format(today);
 
-    let msalApp = null;
-    let activeAccount = null;
+    let currentIcsText = "";
 
-    function hasConfig() {
-      return !!(config.clientId && !/enter|paste|client/i.test(config.clientId));
-    }
-
-    function localIso(date) {
-      const pad = (n) => String(n).padStart(2, "0");
-      const offset = -date.getTimezoneOffset();
-      const sign = offset >= 0 ? "+" : "-";
-      const abs = Math.abs(offset);
-      return date.getFullYear() + "-" + pad(date.getMonth() + 1) + "-" + pad(date.getDate()) +
-        "T" + pad(date.getHours()) + ":" + pad(date.getMinutes()) + ":" + pad(date.getSeconds()) +
-        sign + pad(Math.floor(abs / 60)) + ":" + pad(abs % 60);
+    function storeKey(name, fallback) {
+      return config[name] || fallback;
     }
 
     function dayBounds() {
@@ -199,25 +240,168 @@
       return { start, end };
     }
 
-    async function getToken() {
-      const request = { scopes: config.scopes || ["User.Read", "Calendars.Read"], account: activeAccount };
-      try {
-        return (await msalApp.acquireTokenSilent(request)).accessToken;
-      } catch (err) {
-        await msalApp.acquireTokenRedirect(request);
-      }
+    function unfoldIcs(text) {
+      return String(text || "").replace(/\r\n[ \t]/g, "").replace(/\n[ \t]/g, "").split(/\r?\n/);
     }
 
-    async function graph(path) {
-      const token = await getToken();
-      const res = await fetch("https://graph.microsoft.com/v1.0" + path, {
-        headers: {
-          Authorization: "Bearer " + token,
-          Prefer: 'outlook.timezone="' + (config.graphTimeZone || "New Zealand Standard Time") + '"'
+    function parseParams(name) {
+      const parts = name.split(";");
+      const key = parts.shift().toUpperCase();
+      const params = {};
+      parts.forEach((part) => {
+        const ix = part.indexOf("=");
+        if (ix > -1) params[part.slice(0, ix).toUpperCase()] = part.slice(ix + 1);
+      });
+      return { key, params };
+    }
+
+    function unescapeIcs(value) {
+      return String(value || "")
+        .replace(/\\n/g, " ")
+        .replace(/\\,/g, ",")
+        .replace(/\\;/g, ";")
+        .replace(/\\\\/g, "\\");
+    }
+
+    function parseIcsDate(value, params) {
+      if (!value) return null;
+      const isDateOnly = (params && params.VALUE === "DATE") || /^\d{8}$/.test(value);
+      const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})?)?(Z)?$/);
+      if (!m) return new Date(value);
+      const y = +m[1], mo = +m[2] - 1, d = +m[3];
+      if (isDateOnly || !m[4]) return new Date(y, mo, d);
+      const hh = +m[4], mm = +m[5], ss = +(m[6] || 0);
+      if (m[7]) return new Date(Date.UTC(y, mo, d, hh, mm, ss));
+      return new Date(y, mo, d, hh, mm, ss);
+    }
+
+    function parseRRule(value) {
+      const out = {};
+      String(value || "").split(";").forEach((part) => {
+        const ix = part.indexOf("=");
+        if (ix > -1) out[part.slice(0, ix).toUpperCase()] = part.slice(ix + 1);
+      });
+      return out;
+    }
+
+    function parseIcs(text) {
+      const lines = unfoldIcs(text);
+      const events = [];
+      let event = null;
+      lines.forEach((line) => {
+        if (line === "BEGIN:VEVENT") { event = {}; return; }
+        if (line === "END:VEVENT") { if (event) events.push(event); event = null; return; }
+        if (!event) return;
+        const ix = line.indexOf(":");
+        if (ix < 0) return;
+        const head = line.slice(0, ix);
+        const value = line.slice(ix + 1);
+        const { key, params } = parseParams(head);
+        if (key === "SUMMARY") event.summary = unescapeIcs(value);
+        if (key === "LOCATION") event.location = unescapeIcs(value);
+        if (key === "DESCRIPTION") event.description = unescapeIcs(value);
+        if (key === "DTSTART") { event.start = parseIcsDate(value, params); event.allDay = params.VALUE === "DATE"; }
+        if (key === "DTEND") event.end = parseIcsDate(value, params);
+        if (key === "RRULE") event.rrule = parseRRule(value);
+        if (key === "STATUS") event.status = value;
+      });
+      return events.filter((event) => event.start && event.status !== "CANCELLED");
+    }
+
+    function intersects(start, end, rangeStart, rangeEnd) {
+      const finish = end || new Date(start.getTime() + 30 * 60000);
+      return start < rangeEnd && finish > rangeStart;
+    }
+
+    function weekdayCode(date) {
+      return ["SU", "MO", "TU", "WE", "TH", "FR", "SA"][date.getDay()];
+    }
+
+    function monthDiff(a, b) {
+      return (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth();
+    }
+
+    function recurringMatches(event, date, occurrenceNumber) {
+      const rule = event.rrule || {};
+      const interval = Math.max(1, parseInt(rule.INTERVAL || "1", 10));
+      if (rule.UNTIL) {
+        const until = parseIcsDate(rule.UNTIL, {});
+        if (until && date > until) return false;
+      }
+      if (rule.COUNT && occurrenceNumber > parseInt(rule.COUNT, 10)) return false;
+      const diffDays = Math.floor((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(event.start.getFullYear(), event.start.getMonth(), event.start.getDate())) / 86400000);
+      if (diffDays < 0) return false;
+      if (rule.FREQ === "DAILY") return diffDays % interval === 0;
+      if (rule.FREQ === "WEEKLY") {
+        const byDay = rule.BYDAY ? rule.BYDAY.split(",") : [weekdayCode(event.start)];
+        return Math.floor(diffDays / 7) % interval === 0 && byDay.includes(weekdayCode(date));
+      }
+      if (rule.FREQ === "MONTHLY") {
+        return monthDiff(event.start, date) % interval === 0 && event.start.getDate() === date.getDate();
+      }
+      return false;
+    }
+
+    function todaysEvents(text) {
+      const { start: rangeStart, end: rangeEnd } = dayBounds();
+      const events = [];
+      parseIcs(text).forEach((event) => {
+        const duration = (event.end || new Date(event.start.getTime() + 30 * 60000)) - event.start;
+        if (!event.rrule) {
+          if (intersects(event.start, event.end, rangeStart, rangeEnd)) events.push(event);
+          return;
+        }
+        let occurrenceNumber = 0;
+        for (let d = new Date(event.start); d < rangeEnd; d.setDate(d.getDate() + 1)) {
+          occurrenceNumber += 1;
+          if (!recurringMatches(event, d, occurrenceNumber)) continue;
+          const start = new Date(d);
+          start.setHours(event.start.getHours(), event.start.getMinutes(), event.start.getSeconds(), 0);
+          const end = new Date(start.getTime() + duration);
+          if (intersects(start, end, rangeStart, rangeEnd)) events.push({ ...event, start, end });
         }
       });
-      if (!res.ok) throw new Error("Graph request failed: " + res.status);
-      return res.json();
+      return events.sort((a, b) => a.start - b.start);
+    }
+
+    async function loadIcsText() {
+      const feed = localStorage.getItem(storeKey("calendarFeedStorageKey", "mpg_agenda_calendar_feed_v1"));
+      const savedText = localStorage.getItem(storeKey("calendarTextStorageKey", "mpg_agenda_calendar_text_v1"));
+      els.feedInput.value = feed || "";
+      if (feed) {
+        try {
+          const res = await fetch(feed + (feed.includes("?") ? "&" : "?") + "t=" + Date.now(), { cache: "no-store" });
+          if (!res.ok) throw new Error("Calendar feed failed");
+          currentIcsText = await res.text();
+          localStorage.setItem(storeKey("calendarTextStorageKey", "mpg_agenda_calendar_text_v1"), currentIcsText);
+          els.calendarStatus.textContent = "Feed refreshed";
+          return currentIcsText;
+        } catch (err) {
+          currentIcsText = savedText || "";
+          els.calendarStatus.textContent = currentIcsText ? "Using saved calendar" : "Feed blocked";
+          return currentIcsText;
+        }
+      }
+      currentIcsText = savedText || "";
+      els.calendarStatus.textContent = currentIcsText ? "Imported file" : "No calendar";
+      return currentIcsText;
+    }
+
+    function renderMeetings(events) {
+      if (!events.length) {
+        els.meetingList.innerHTML = '<div class="empty">No calendar items loaded for today.</div>';
+        return;
+      }
+      els.meetingList.innerHTML = events.map((event) => {
+        const time = event.allDay ? "All day" : fmtTime.format(event.start) + (event.end ? " - " + fmtTime.format(event.end) : "");
+        return '<div class="row">' +
+          '<div class="time">' + escapeHtml(time) + '</div>' +
+          '<div>' +
+            '<div class="item-title">' + escapeHtml(event.summary || "No subject") + '</div>' +
+            '<div class="meta">' + escapeHtml(event.location || "") + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join("");
     }
 
     function taskScore(task) {
@@ -238,14 +422,13 @@
         else if (days <= 7) score += 25;
       }
       const reqs = Array.isArray(task.reqs) ? task.reqs : [];
-      const openReqs = reqs.filter((r) => !(typeof r === "object" && r.done)).length;
-      score += Math.min(openReqs * 4, 20);
+      score += Math.min(reqs.filter((r) => !(typeof r === "object" && r.done)).length * 4, 20);
       return score;
     }
 
     function dashboardTasks() {
       try {
-        const raw = localStorage.getItem(config.dashboardStorageKey || "mpg_ops_dashboard_data_v4");
+        const raw = localStorage.getItem(storeKey("dashboardStorageKey", "mpg_ops_dashboard_data_v4"));
         if (!raw) return [];
         const data = JSON.parse(raw);
         const out = [];
@@ -253,8 +436,7 @@
           (section.tasks || []).forEach((task) => {
             if (task.status === "dn") return;
             const score = taskScore(task);
-            if (score <= 0) return;
-            out.push({ section: section.label, color: section.color, score, task });
+            if (score > 0) out.push({ section: section.label, score, task });
           });
         });
         return out.sort((a, b) => b.score - a.score).slice(0, config.priorityLimit || 8);
@@ -289,99 +471,114 @@
       }).join("");
     }
 
-    function renderMeetings(events) {
-      if (!events.length) {
-        els.meetingList.innerHTML = '<div class="empty">No Outlook meetings today.</div>';
-        return;
-      }
-      els.meetingList.innerHTML = events.map((event) => {
-        const start = event.start && event.start.dateTime ? new Date(event.start.dateTime) : null;
-        const end = event.end && event.end.dateTime ? new Date(event.end.dateTime) : null;
-        const time = event.isAllDay ? "All day" : (start ? fmtTime.format(start) : "") + (end ? " - " + fmtTime.format(end) : "");
-        const location = event.location && event.location.displayName ? event.location.displayName : "";
-        const organizer = event.organizer && event.organizer.emailAddress ? event.organizer.emailAddress.name : "";
-        return '<div class="row">' +
-          '<div class="time">' + escapeHtml(time) + '</div>' +
-          '<div>' +
-            '<div class="item-title">' + escapeHtml(event.subject || "No subject") + '</div>' +
-            '<div class="meta">' + escapeHtml([location, organizer].filter(Boolean).join(" | ")) + '</div>' +
-            (event.importance === "high" ? '<span class="badge red">High importance</span>' : '') +
-          '</div>' +
-        '</div>';
-      }).join("");
-    }
-
     function escapeHtml(value) {
-      return String(value || "").replace(/[&<>"']/g, (c) => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-      }[c]));
+      return String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c]));
     }
 
-    async function loadAgenda() {
-      els.refresh.disabled = true;
-      els.refresh.textContent = "Refreshing";
-      try {
-        const { start, end } = dayBounds();
-        const params = new URLSearchParams({
-          startDateTime: localIso(start),
-          endDateTime: localIso(end),
-          "$orderby": "start/dateTime",
-          "$select": "subject,start,end,location,organizer,responseStatus,isAllDay,importance,showAs"
-        });
-        const data = await graph("/me/calendar/calendarView?" + params.toString());
-        renderMeetings(data.value || []);
-        renderPriorities(dashboardTasks());
-      } catch (err) {
-        els.meetingList.innerHTML = '<div class="notice">Could not load Outlook agenda. Sign in again or check Microsoft app permissions.</div>';
-        renderPriorities(dashboardTasks());
-      } finally {
-        els.refresh.disabled = false;
-        els.refresh.textContent = "Refresh";
-      }
+    async function sha256(text) {
+      const data = new TextEncoder().encode(text);
+      const hash = await crypto.subtle.digest("SHA-256", data);
+      return Array.from(new Uint8Array(hash)).map((b) => b.toString(16).padStart(2, "0")).join("");
     }
 
-    function showUnlocked() {
-      els.lockedPanel.classList.add("hidden");
-      els.agendaGrid.classList.remove("hidden");
-      els.signIn.classList.add("hidden");
-      els.signOut.classList.remove("hidden");
-      els.refresh.disabled = false;
-      els.signedInAs.textContent = activeAccount && activeAccount.username ? activeAccount.username : "";
+    async function savePin() {
+      const pin = els.newPinInput.value.trim();
+      if (!pin) return;
+      const salt = crypto.getRandomValues(new Uint32Array(4)).join("-");
+      const hash = await sha256(salt + ":" + pin);
+      localStorage.setItem(storeKey("lockStorageKey", "mpg_agenda_lock_v1"), JSON.stringify({ salt, hash }));
+      sessionStorage.setItem("mpg_agenda_unlocked", "1");
+      els.newPinInput.value = "";
+      showAgenda();
     }
 
-    async function init() {
-      if (!hasConfig()) {
-        els.setupMessage.classList.remove("hidden");
-        els.lockMessage.textContent = "Outlook sign-in needs a Microsoft app client ID before this page can unlock.";
-        els.signIn.disabled = true;
+    async function unlock() {
+      const lock = getLock();
+      if (!lock) {
+        await savePin();
         return;
       }
-      msalApp = new msal.PublicClientApplication({
-        auth: {
-          clientId: config.clientId,
-          authority: "https://login.microsoftonline.com/" + (config.tenantId || "organizations"),
-          redirectUri: config.redirectUri || window.location.href,
-          navigateToLoginRequestUrl: false
-        },
-        cache: { cacheLocation: "sessionStorage" }
-      });
-      const result = await msalApp.handleRedirectPromise();
-      activeAccount = result && result.account ? result.account : msalApp.getAllAccounts()[0];
-      if (activeAccount) {
-        msalApp.setActiveAccount(activeAccount);
-        showUnlocked();
-        loadAgenda();
+      const hash = await sha256(lock.salt + ":" + els.pinInput.value);
+      if (hash === lock.hash) {
+        sessionStorage.setItem("mpg_agenda_unlocked", "1");
+        els.pinInput.value = "";
+        showAgenda();
+        refresh();
+      } else {
+        els.lockMessage.textContent = "That PIN did not match.";
       }
     }
 
-    els.signIn.addEventListener("click", () => msalApp && msalApp.loginRedirect({ scopes: config.scopes || ["User.Read", "Calendars.Read"] }));
-    els.signOut.addEventListener("click", () => msalApp && msalApp.logoutRedirect());
-    els.refresh.addEventListener("click", loadAgenda);
-    init();
+    function getLock() {
+      try { return JSON.parse(localStorage.getItem(storeKey("lockStorageKey", "mpg_agenda_lock_v1")) || "null"); }
+      catch (err) { return null; }
+    }
+
+    function shouldLock() {
+      return !!getLock() && sessionStorage.getItem("mpg_agenda_unlocked") !== "1";
+    }
+
+    function showLock() {
+      els.agendaGrid.classList.add("hidden");
+      els.setupPanel.classList.add("hidden");
+      els.lockPanel.classList.remove("hidden");
+      els.lockTitle.textContent = getLock() ? "Locked" : "Set local PIN";
+      els.lockMessage.textContent = getLock() ? "Enter the local PIN for this browser." : "Create a local PIN for this page.";
+    }
+
+    function showAgenda() {
+      els.lockPanel.classList.add("hidden");
+      els.setupPanel.classList.add("hidden");
+      els.agendaGrid.classList.remove("hidden");
+    }
+
+    async function refresh() {
+      if (shouldLock()) { showLock(); return; }
+      showAgenda();
+      const text = await loadIcsText();
+      renderMeetings(text ? todaysEvents(text) : []);
+      renderPriorities(dashboardTasks());
+    }
+
+    els.refresh.addEventListener("click", refresh);
+    els.setup.addEventListener("click", () => {
+      if (shouldLock()) return showLock();
+      els.lockPanel.classList.add("hidden");
+      els.agendaGrid.classList.add("hidden");
+      els.setupPanel.classList.remove("hidden");
+      els.feedInput.value = localStorage.getItem(storeKey("calendarFeedStorageKey", "mpg_agenda_calendar_feed_v1")) || "";
+    });
+    els.closeSetup.addEventListener("click", refresh);
+    els.lock.addEventListener("click", () => { sessionStorage.removeItem("mpg_agenda_unlocked"); showLock(); });
+    els.unlock.addEventListener("click", unlock);
+    els.pinInput.addEventListener("keydown", (event) => { if (event.key === "Enter") unlock(); });
+    els.resetPin.addEventListener("click", () => {
+      localStorage.removeItem(storeKey("lockStorageKey", "mpg_agenda_lock_v1"));
+      sessionStorage.setItem("mpg_agenda_unlocked", "1");
+      showAgenda();
+    });
+    els.savePin.addEventListener("click", savePin);
+    els.saveFeed.addEventListener("click", () => {
+      const url = els.feedInput.value.trim();
+      if (url) localStorage.setItem(storeKey("calendarFeedStorageKey", "mpg_agenda_calendar_feed_v1"), url);
+      refresh();
+    });
+    els.clearFeed.addEventListener("click", () => {
+      localStorage.removeItem(storeKey("calendarFeedStorageKey", "mpg_agenda_calendar_feed_v1"));
+      localStorage.removeItem(storeKey("calendarTextStorageKey", "mpg_agenda_calendar_text_v1"));
+      currentIcsText = "";
+      refresh();
+    });
+    els.fileInput.addEventListener("change", async () => {
+      const file = els.fileInput.files && els.fileInput.files[0];
+      if (!file) return;
+      currentIcsText = await file.text();
+      localStorage.setItem(storeKey("calendarTextStorageKey", "mpg_agenda_calendar_text_v1"), currentIcsText);
+      localStorage.removeItem(storeKey("calendarFeedStorageKey", "mpg_agenda_calendar_feed_v1"));
+      refresh();
+    });
+
+    refresh();
   </script>
 </body>
 </html>
