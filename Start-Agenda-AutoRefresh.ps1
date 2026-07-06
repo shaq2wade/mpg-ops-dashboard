@@ -59,7 +59,13 @@ Write-Host "Local endpoint: http://127.0.0.1:$Port/digest"
 Write-Host "Refresh cadence: every $RefreshMinutes minutes"
 Write-Host "Keep this window open. Press Ctrl+C to stop."
 Write-Host ""
-Start-Process $AgendaUrl
+if ($env:MPG_AGENDA_OPEN_BROWSER -eq "1") {
+  try {
+    Start-Process $AgendaUrl
+  } catch {
+    Write-Host "Could not auto-open agenda page: $($_.Exception.Message)"
+  }
+}
 
 try {
   while ($true) {
