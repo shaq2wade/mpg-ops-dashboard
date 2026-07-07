@@ -72,18 +72,21 @@ $cutoff = (Get-Date).AddDays(-1 * [math]::Abs($DaysBack))
 
 $inboxRows = New-Object System.Collections.Generic.List[object]
 $inboxItems = $namespace.GetDefaultFolder(6).Items
-try { $inboxItems = $inboxItems.Restrict("[FlagStatus] = 2") } catch {}
 $inboxItems.Sort("[ReceivedTime]", $true)
 
 $seenInbox = 0
+$scannedInbox = 0
 foreach ($item in $inboxItems) {
   if ($seenInbox -ge $MaxInbox) { break }
+  if ($scannedInbox -ge 5000) { break }
+  $scannedInbox += 1
   if ($item.Class -ne 43) { continue }
+  $received = $null
+  try { $received = [datetime]$item.ReceivedTime } catch {}
+  if ($received -and $received -lt $cutoff) { break }
   $flagStatus = 0
   try { $flagStatus = [int]$item.FlagStatus } catch {}
   if ($flagStatus -ne 2) { continue }
-  $received = $null
-  try { $received = [datetime]$item.ReceivedTime } catch {}
   $seenInbox += 1
   $inboxRows.Add([pscustomobject]@{
     id = Clean-Text $item.EntryID 300
